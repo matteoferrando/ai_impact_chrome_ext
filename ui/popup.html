@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Impact Meter</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>AI Impact Meter</h1>
+      <div class="sub">Stima locale · nessuna rete</div>
+    </header>
+
+    <section class="card">
+      <h2>Questa sessione (tab attivo)</h2>
+      <div class="highlight" id="session-ux-highlight">Eco-Score: --</div>
+      <div class="metric">
+        <div class="label">kWh</div>
+        <div class="value" id="session-kwh">--</div>
+      </div>
+      <div class="metric">
+        <div class="label">CO2e (g)</div>
+        <div class="value" id="session-co2">--</div>
+      </div>
+      <div class="uxline" id="session-equivalences">Equivalenze (stima): --</div>
+      <div class="uxline" id="session-driver">Driver principale: --</div>
+      <div class="note">Equivalenze indicative basate su assunzioni configurabili.</div>
+      <div class="breakdown" id="session-breakdown"></div>
+    </section>
+
+    <section class="card">
+      <h2>Oggi</h2>
+      <div class="highlight" id="day-ux-highlight">Eco-Score: --</div>
+      <div class="metric">
+        <div class="label">kWh</div>
+        <div class="value" id="day-kwh">--</div>
+      </div>
+      <div class="metric">
+        <div class="label">CO2e (g)</div>
+        <div class="value" id="day-co2">--</div>
+      </div>
+      <div class="uxline" id="day-equivalences">Equivalenze (stima): --</div>
+      <div class="uxline" id="day-driver">Driver principale: --</div>
+      <div class="note">Equivalenze indicative basate su assunzioni configurabili.</div>
+      <div class="breakdown" id="day-breakdown"></div>
+    </section>
+
+    <section class="card">
+      <h2>HUD Overlay</h2>
+      <label class="toggle">
+        <input type="checkbox" id="hud-toggle" />
+        <span>ON/OFF per questo sito</span>
+      </label>
+    </section>
+
+    <section class="actions">
+      <button id="export-json">Export JSON</button>
+      <button id="export-csv">Export CSV</button>
+      <button id="open-options">Open Options</button>
+    </section>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #f7f7f7;
+  color: #1b1b1b;
+}
+
+.wrap {
+  width: 320px;
+  padding: 12px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+header .sub {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.card h2 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.metric .value {
+  font-weight: 600;
+}
+
+.highlight {
+  background: #111827;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.uxline {
+  font-size: 12px;
+  color: #333;
+  margin-top: 4px;
+}
+
+.note {
+  font-size: 11px;
+  color: #666;
+  margin-top: 6px;
+}
+
+.breakdown {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #444;
+}
+
+.breakdown .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.actions {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.actions button {
+  border: 0;
+  background: #1b1b1b;
+  color: #fff;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.actions button#open-options {
+  grid-column: span 2;
+  background: #4d6fff;
+}

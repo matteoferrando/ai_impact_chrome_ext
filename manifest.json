@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "AI Impact Meter",
+  "version": "0.1.0",
+  "description": "Estima l'impatto ambientale dell'uso di AI generativa su ChatGPT, Gemini e Claude.",
+  "action": {
+    "default_title": "AI Impact Meter",
+    "default_popup": "ui/popup.html"
+  },
+  "options_page": "ui/options.html",
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://claude.ai/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "content_scripts/common.js",
+        "content_scripts/hud.js",
+        "content_scripts/providers/chatgpt.js",
+        "content_scripts/providers/gemini.js",
+        "content_scripts/providers/claude.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "estimator/model.js",
+        "estimator/presets.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

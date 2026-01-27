@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Impact Meter - Options</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>AI Impact Meter</h1>
+      <p>Assunzioni configurabili per la stima (range min/mid/max).</p>
+    </header>
+
+    <section class="card">
+      <label>
+        Scenario
+        <select id="preset-select"></select>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Parametri</h2>
+      <div id="params"></div>
+      <div class="actions">
+        <button id="save">Salva</button>
+        <button id="reset">Reset defaults</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>User-friendly metrics</h2>
+      <div class="grid" id="ux-equivalences">
+        <div class="head">Equivalenze (assunzioni)</div>
+        <div class="head">Valore</div>
+        <div></div>
+        <div></div>
+        <div>Wh per ricarica smartphone</div>
+        <input type="number" step="any" id="wh_per_phone_charge" />
+        <div></div>
+        <div></div>
+        <div>gCO2e per km auto</div>
+        <input type="number" step="any" id="gco2_per_km_car" />
+        <div></div>
+        <div></div>
+        <div>gCO2e per min streaming</div>
+        <input type="number" step="any" id="gco2_per_min_streaming" />
+        <div></div>
+        <div></div>
+      </div>
+      <div class="grid" id="ux-eco">
+        <div class="head">Eco-Score</div>
+        <div class="head">Valore</div>
+        <div></div>
+        <div></div>
+        <div>Target sessione (g CO2e)</div>
+        <input type="number" step="any" id="target_g_session" />
+        <div></div>
+        <div></div>
+        <div>Target giornaliero (g CO2e)</div>
+        <input type="number" step="any" id="target_g_day" />
+        <div></div>
+        <div></div>
+        <div>Soglia Light (g CO2e)</div>
+        <input type="number" step="any" id="badge_light_max_g" />
+        <div></div>
+        <div></div>
+        <div>Soglia Work (g CO2e)</div>
+        <input type="number" step="any" id="badge_work_max_g" />
+        <div></div>
+        <div></div>
+        <div>Soglia Creative (g CO2e)</div>
+        <input type="number" step="any" id="badge_creative_max_g" />
+        <div></div>
+        <div></div>
+      </div>
+      <p class="note">Equivalenze indicative basate su parametri configurabili.</p>
+    </section>
+
+    <section class="card">
+      <h2>Assumptions (breve)</h2>
+      <ul>
+        <li>Token stimati da caratteri: non sono token reali.</li>
+        <li>kWh per 1k token / immagine / video sono proxy configurabili.</li>
+        <li>CO2e dipende dal fattore di rete (gCO2e/kWh).</li>
+      </ul>
+    </section>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
