@@ -52,6 +52,8 @@ Because all processing occurs locally and no data leaves the device, no user dat
 
 If this privacy policy changes, updates will be reflected on this page and in the Chrome Web Store listing.
 
+Public page: https://matteoferrando.github.io/ai_impact_chrome_ext/
+
 ## 7. Contact
 
 For questions about this privacy policy, contact:
