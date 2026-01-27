@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Impact Meter",
   "version": "0.1.0",
-  "description": "Estima l'impatto ambientale dell'uso di AI generativa su ChatGPT, Gemini e Claude.",
+  "description": "Stima l'impatto ambientale dell'uso di AI generativa su ChatGPT, Gemini e Claude.",
   "action": {
     "default_title": "AI Impact Meter",
     "default_popup": "ui/popup.html"
