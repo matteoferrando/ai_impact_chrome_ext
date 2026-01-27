@@ -49,6 +49,7 @@ Estensione Chrome (Manifest V3) che **stima** l’impatto ambientale dell’uso 
 ## Privacy
 - **Nessuna rete**: nessun dato inviato all’esterno.
 - Tutti i dati sono in locale (`chrome.storage.local`).
+- Privacy Policy (GitHub Pages): `https://matteoferrando.github.io/ai_impact_chrome_ext/`
 
 ## TODO (futuro)
 - Token reali via API per utenti che lo desiderano.
