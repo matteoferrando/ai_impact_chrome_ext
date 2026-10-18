@@ -2,7 +2,10 @@
 
 Estensione Chrome (Manifest V3) che **stima** l’impatto ambientale dell’uso di AI generativa su ChatGPT, Gemini e Claude. Le stime sono basate su proxy osservabili (caratteri, immagini/video rilevati nel DOM), **non** su misure energetiche reali.
 
-## Installazione (Load unpacked)
+## Installazione
+Il modo più semplice è installarla dal [Chrome Web Store](https://chromewebstore.google.com/detail/ai-impact-meter/cilgpiakddglcifgfkcaaobncoheheej).
+
+Per provare il codice di questo repository (Load unpacked):
 1. Apri `chrome://extensions`
 2. Attiva **Developer mode**
 3. Clicca **Load unpacked**
@@ -55,3 +58,9 @@ Estensione Chrome (Manifest V3) che **stima** l’impatto ambientale dell’uso 
 - Token reali via API per utenti che lo desiderano.
 - Heuristics DOM per nuovi layout e aggiornamenti UI.
 - Miglior supporto a rigenerazioni/edits e thread multipli.
+
+## Autore
+AI Impact Meter è un progetto di [Matteo Ferrando](https://matteoferrando.com), nato dalle ricerche per il libro «AI: L'Impronta Fantasma». Le stesse ipotesi di calcolo sono nel [calcolatore](https://matteoferrando.com/impronta-ai/) sul sito.
+
+## Licenza
+Rilasciato con licenza [MIT](LICENSE).
