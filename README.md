@@ -13,7 +13,10 @@ Estensione Chrome (Manifest V3) che **stima in tempo reale** energia, CO₂e e a
 - **Impostazioni** con 3 scenari (Conservative, Typical, Aggressive), parametri min/mid/max validati, anteprima live, gestione dati (export JSON/CSV, cancellazione) e metodologia con fonti.
 - Tema chiaro/scuro automatico.
 
-## Installazione (Load unpacked)
+## Installazione
+Il modo più semplice è installarla dal [Chrome Web Store](https://chromewebstore.google.com/detail/ai-impact-meter/cilgpiakddglcifgfkcaaobncoheheej).
+
+Per provare il codice di questo repository (Load unpacked):
 1. Apri `chrome://extensions`
 2. Attiva **Developer mode**
 3. Clicca **Load unpacked** e seleziona la cartella del progetto
@@ -70,3 +73,9 @@ tests/                       unit ed end-to-end
 - Nessuna richiesta di rete; dati solo in `chrome.storage.local`.
 - Il testo di prompt e risposte non viene mai salvato: solo lunghezze e conteggi.
 - Privacy Policy: https://matteoferrando.github.io/ai_impact_chrome_ext/
+
+## Autore
+AI Impact Meter è un progetto di [Matteo Ferrando](https://matteoferrando.com), nato dalle ricerche per il libro «AI: L'Impronta Fantasma». Le stesse ipotesi di calcolo sono nel [calcolatore](https://matteoferrando.com/impronta-ai/) sul sito.
+
+## Licenza
+Rilasciato con licenza [MIT](LICENSE).
