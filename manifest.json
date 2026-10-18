@@ -1,13 +1,28 @@
 {
   "manifest_version": 3,
   "name": "AI Impact Meter",
-  "version": "0.1.0",
-  "description": "Stima l'impatto ambientale dell'uso di AI generativa su ChatGPT, Gemini e Claude.",
+  "version": "0.2.0",
+  "description": "Stima in tempo reale energia, CO₂e e acqua del tuo uso di ChatGPT, Gemini e Claude. 100% locale.",
+  "minimum_chrome_version": "111",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_title": "AI Impact Meter",
-    "default_popup": "ui/popup.html"
+    "default_popup": "ui/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
   },
-  "options_page": "ui/options.html",
+  "options_ui": {
+    "page": "ui/options.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "service_worker.js",
     "type": "module"
@@ -25,29 +40,30 @@
   ],
   "content_scripts": [
     {
-      "matches": [
-        "https://chat.openai.com/*",
-        "https://chatgpt.com/*",
-        "https://gemini.google.com/*",
-        "https://claude.ai/*"
-      ],
-      "js": [
-        "content_scripts/common.js",
-        "content_scripts/hud.js",
-        "content_scripts/providers/chatgpt.js",
-        "content_scripts/providers/gemini.js",
-        "content_scripts/providers/claude.js"
-      ],
+      "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
+      "js": ["content_scripts/common.js", "content_scripts/hud.js", "content_scripts/providers/chatgpt.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content_scripts/common.js", "content_scripts/hud.js", "content_scripts/providers/gemini.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content_scripts/common.js", "content_scripts/hud.js", "content_scripts/providers/claude.js"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": [
-        "estimator/model.js",
-        "estimator/presets.js"
-      ],
-      "matches": ["<all_urls>"]
+      "resources": ["estimator/model.js"],
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ]
     }
   ]
 }

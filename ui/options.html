@@ -3,90 +3,113 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Impact Meter - Options</title>
+  <title>AI Impact Meter · Impostazioni</title>
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
   <div class="wrap">
-    <header>
-      <h1>AI Impact Meter</h1>
-      <p>Assunzioni configurabili per la stima (range min/mid/max).</p>
+    <header class="top">
+      <img src="../icons/icon128.png" alt="" width="52" height="52" class="logo" />
+      <div>
+        <h1>AI Impact Meter</h1>
+        <p class="muted">Stima locale dell'impatto ambientale di ChatGPT, Gemini e Claude. Tutte le assunzioni sono modificabili.</p>
+      </div>
     </header>
 
-    <section class="card">
-      <label>
-        Scenario
-        <select id="preset-select"></select>
-      </label>
-    </section>
-
-    <section class="card">
-      <h2>Parametri</h2>
-      <div id="params"></div>
-      <div class="actions">
-        <button id="save">Salva</button>
-        <button id="reset">Reset defaults</button>
+    <section class="card preview" aria-live="polite">
+      <div>
+        <div class="kicker">Anteprima con i parametri correnti</div>
+        <div class="pv-title">Un turno tipico <span class="muted">(~300 caratteri di prompt, ~2.000 di risposta)</span></div>
+      </div>
+      <div class="pv-stats">
+        <div><b id="pv-wh">--</b><span>Wh</span></div>
+        <div><b id="pv-g">--</b><span>g CO₂e</span></div>
+        <div><b id="pv-ml">--</b><span>mL acqua</span></div>
+        <div><b id="pv-img">--</b><span>Wh / immagine</span></div>
       </div>
     </section>
 
     <section class="card">
-      <h2>User-friendly metrics</h2>
-      <div class="grid" id="ux-equivalences">
-        <div class="head">Equivalenze (assunzioni)</div>
-        <div class="head">Valore</div>
-        <div></div>
-        <div></div>
-        <div>Wh per ricarica smartphone</div>
-        <input type="number" step="any" id="wh_per_phone_charge" />
-        <div></div>
-        <div></div>
-        <div>gCO2e per km auto</div>
-        <input type="number" step="any" id="gco2_per_km_car" />
-        <div></div>
-        <div></div>
-        <div>gCO2e per min streaming</div>
-        <input type="number" step="any" id="gco2_per_min_streaming" />
-        <div></div>
-        <div></div>
-      </div>
-      <div class="grid" id="ux-eco">
-        <div class="head">Eco-Score</div>
-        <div class="head">Valore</div>
-        <div></div>
-        <div></div>
-        <div>Target sessione (g CO2e)</div>
-        <input type="number" step="any" id="target_g_session" />
-        <div></div>
-        <div></div>
-        <div>Target giornaliero (g CO2e)</div>
-        <input type="number" step="any" id="target_g_day" />
-        <div></div>
-        <div></div>
-        <div>Soglia Light (g CO2e)</div>
-        <input type="number" step="any" id="badge_light_max_g" />
-        <div></div>
-        <div></div>
-        <div>Soglia Work (g CO2e)</div>
-        <input type="number" step="any" id="badge_work_max_g" />
-        <div></div>
-        <div></div>
-        <div>Soglia Creative (g CO2e)</div>
-        <input type="number" step="any" id="badge_creative_max_g" />
-        <div></div>
-        <div></div>
-      </div>
-      <p class="note">Equivalenze indicative basate su parametri configurabili.</p>
+      <h2>Scenario</h2>
+      <p class="muted small">Il punto di partenza per i parametri. Cambiarlo sovrascrive i valori qui sotto (finché non salvi).</p>
+      <div class="presets" id="presets" role="radiogroup" aria-label="Scenario"></div>
     </section>
 
     <section class="card">
-      <h2>Assumptions (breve)</h2>
-      <ul>
-        <li>Token stimati da caratteri: non sono token reali.</li>
-        <li>kWh per 1k token / immagine / video sono proxy configurabili.</li>
-        <li>CO2e dipende dal fattore di rete (gCO2e/kWh).</li>
+      <h2>Parametri di stima</h2>
+      <p class="muted small">Range <b>min · mid · max</b>. Il valore <b>mid</b> è quello mostrato; min e max formano l'intervallo di incertezza.</p>
+      <div id="params" class="params"></div>
+    </section>
+
+    <section class="card">
+      <h2>Metriche comprensibili</h2>
+      <div class="form-grid">
+        <label>Wh per ricarica smartphone<input type="number" step="any" min="0" id="wh_per_phone_charge" /></label>
+        <label>g CO₂e per km in auto<input type="number" step="any" min="0" id="gco2_per_km_car" /></label>
+        <label>g CO₂e per minuto di streaming<input type="number" step="any" min="0" id="gco2_per_min_streaming" /></label>
+        <label>mL d'acqua per Wh (raffreddamento)<input type="number" step="any" min="0" id="water_ml_per_wh" /></label>
+        <label>Potenza lampadina LED (W)<input type="number" step="any" min="0" id="led_bulb_watts" /></label>
+      </div>
+      <h3>Eco-Score e badge</h3>
+      <div class="form-grid">
+        <label>Target sessione (g CO₂e)<input type="number" step="any" min="0" id="target_g_session" /></label>
+        <label>Target giornaliero (g CO₂e)<input type="number" step="any" min="0" id="target_g_day" /></label>
+        <label>Soglia Light (g CO₂e)<input type="number" step="any" min="0" id="badge_light_max_g" /></label>
+        <label>Soglia Work (g CO₂e)<input type="number" step="any" min="0" id="badge_work_max_g" /></label>
+        <label>Soglia Heavy oltre (g CO₂e)<input type="number" step="any" min="0" id="badge_creative_max_g" /></label>
+      </div>
+      <p class="muted small">L'Eco-Score parte da 100 e scende fino a 0 quando raggiungi il target. Immagini → badge Creative, video → Heavy.</p>
+    </section>
+
+    <section class="card">
+      <h2>I tuoi dati</h2>
+      <div class="data-stats">
+        <div><b id="d-activities">--</b><span>attività salvate</span></div>
+        <div><b id="d-days">--</b><span>giorni di storico</span></div>
+        <div><b id="d-total">--</b><span id="d-total-u">g CO₂e totali</span></div>
+        <div><b id="d-bytes">--</b><span>spazio usato</span></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" id="export-json">⬇ Export JSON</button>
+        <button class="btn" id="export-csv">⬇ Export CSV</button>
+        <span class="spacer"></span>
+        <button class="btn danger" id="reset-today">Cancella oggi</button>
+        <button class="btn danger" id="reset-all">Cancella tutto</button>
+      </div>
+      <p class="muted small">Tutto resta in <code>chrome.storage.local</code> su questo dispositivo. Nessuna richiesta di rete. I nuovi parametri valgono per le attività future.</p>
+    </section>
+
+    <section class="card">
+      <h2>Metodologia e fonti</h2>
+      <ul class="method">
+        <li><b>Testo:</b> token stimati da caratteri di prompt + risposta (÷ caratteri per token) × kWh per 1k token.</li>
+        <li><b>Immagini:</b> numero di immagini generate rilevate nella risposta × kWh per immagine.</li>
+        <li><b>Video:</b> secondi di video generato (durata letta dal player o valore di default) × kWh al secondo.</li>
+        <li><b>CO₂e:</b> energia × intensità carbonica della rete (g CO₂e/kWh). <b>Acqua:</b> energia × mL/Wh.</li>
+        <li>Non include il contesto della conversazione, il training dei modelli né l'hardware: è una stima d'ordine di grandezza dell'inferenza.</li>
       </ul>
+      <div class="sources">
+        <div class="kicker">Riferimenti indicativi</div>
+        <ul>
+          <li>Google (2025), <i>Measuring the environmental impact of AI inference</i>: prompt testuale mediano Gemini ≈ 0,24 Wh, 0,03 g CO₂e, 0,26 mL d'acqua.</li>
+          <li>S. Altman (2025), <i>The Gentle Singularity</i>: query media ChatGPT ≈ 0,34 Wh.</li>
+          <li>Epoch AI (2025), <i>How much energy does ChatGPT use?</i>: ≈ 0,3 Wh per query GPT-4o tipica.</li>
+          <li>Luccioni et al. (2023), <i>Power Hungry Processing</i>: generazione immagini ≈ 2,9 kWh ogni 1.000 inferenze.</li>
+          <li>IEA / Ember: intensità carbonica media della rete elettrica tra ~150 e ~700 g CO₂e/kWh a seconda del paese.</li>
+        </ul>
+      </div>
     </section>
   </div>
+
+  <div class="savebar" id="savebar" role="region" aria-label="Modifiche non salvate">
+    <span id="savebar-msg">Modifiche non salvate</span>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="discard">Annulla</button>
+    <button class="btn" id="reset">Ripristina default</button>
+    <button class="btn primary" id="save">Salva</button>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
 
   <script type="module" src="options.js"></script>
 </body>

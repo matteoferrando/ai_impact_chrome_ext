@@ -4,62 +4,92 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Impact Meter</title>
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
   <div class="wrap">
-    <header>
-      <h1>AI Impact Meter</h1>
-      <div class="sub">Stima locale · nessuna rete</div>
+    <header class="top">
+      <img src="../icons/icon48.png" alt="" class="logo" width="28" height="28" />
+      <div class="brand">
+        <h1>AI Impact Meter</h1>
+        <div class="sub">Stima locale · nessun dato inviato</div>
+      </div>
+      <button class="chip" id="preset-chip" title="Scenario di stima — clicca per cambiarlo">Typical</button>
     </header>
 
-    <section class="card">
-      <h2>Questa sessione (tab attivo)</h2>
-      <div class="highlight" id="session-ux-highlight">Eco-Score: --</div>
-      <div class="metric">
-        <div class="label">kWh</div>
-        <div class="value" id="session-kwh">--</div>
+    <nav class="seg" role="tablist" aria-label="Periodo">
+      <button role="tab" data-scope="session" aria-selected="true">Sessione</button>
+      <button role="tab" data-scope="day">Oggi</button>
+      <button role="tab" data-scope="week">7 giorni</button>
+      <button role="tab" data-scope="total">Totale</button>
+    </nav>
+
+    <section class="card hero" id="hero">
+      <div class="ring" id="ring">
+        <svg viewBox="0 0 80 80" aria-hidden="true">
+          <circle class="track" cx="40" cy="40" r="33" fill="none" stroke-width="8" />
+          <circle class="bar" id="ring-bar" cx="40" cy="40" r="33" fill="none" stroke-width="8" />
+        </svg>
+        <div class="ring-num"><span id="score">--</span><small id="score-label">ECO-SCORE</small></div>
       </div>
-      <div class="metric">
-        <div class="label">CO2e (g)</div>
-        <div class="value" id="session-co2">--</div>
+      <div class="hero-main">
+        <div class="big"><span id="co2">--</span><small id="co2-unit">g CO₂e</small></div>
+        <div class="range" id="co2-range">--</div>
+        <div class="badge" id="badge">--</div>
       </div>
-      <div class="uxline" id="session-equivalences">Equivalenze (stima): --</div>
-      <div class="uxline" id="session-driver">Driver principale: --</div>
-      <div class="note">Equivalenze indicative basate su assunzioni configurabili.</div>
-      <div class="breakdown" id="session-breakdown"></div>
+    </section>
+
+    <div class="empty card hidden" id="empty">
+      <div class="empty-emoji">🌱</div>
+      <div class="empty-title" id="empty-title">Nessuna attività</div>
+      <div class="empty-text" id="empty-text">Invia un prompt a ChatGPT, Gemini o Claude: la stima apparirà qui in tempo reale.</div>
+    </div>
+
+    <section class="tiles" id="tiles">
+      <div class="tile"><div class="tl">⚡ Energia</div><div class="tv"><b id="energy">--</b><span id="energy-unit">Wh</span></div></div>
+      <div class="tile"><div class="tl">💧 Acqua</div><div class="tv"><b id="water">--</b><span id="water-unit">mL</span></div></div>
+      <div class="tile"><div class="tl">💬 Interazioni</div><div class="tv"><b id="turns">--</b><span id="media"></span></div></div>
+      <div class="tile"><div class="tl">🔤 Token stimati</div><div class="tv"><b id="tokens">--</b></div></div>
+    </section>
+
+    <section class="card" id="eq-card">
+      <h2>Equivale a circa</h2>
+      <ul class="eq" id="equivalences"></ul>
+    </section>
+
+    <section class="card" id="breakdown-card">
+      <h2>Per assistente</h2>
+      <div id="breakdown" class="bars"></div>
+      <div class="driver" id="driver"></div>
     </section>
 
     <section class="card">
-      <h2>Oggi</h2>
-      <div class="highlight" id="day-ux-highlight">Eco-Score: --</div>
-      <div class="metric">
-        <div class="label">kWh</div>
-        <div class="value" id="day-kwh">--</div>
-      </div>
-      <div class="metric">
-        <div class="label">CO2e (g)</div>
-        <div class="value" id="day-co2">--</div>
-      </div>
-      <div class="uxline" id="day-equivalences">Equivalenze (stima): --</div>
-      <div class="uxline" id="day-driver">Driver principale: --</div>
-      <div class="note">Equivalenze indicative basate su assunzioni configurabili.</div>
-      <div class="breakdown" id="day-breakdown"></div>
+      <div class="row-head"><h2>Ultimi 7 giorni</h2><span class="muted" id="week-total"></span></div>
+      <div class="chart" id="chart" role="img" aria-label="CO2e per giorno negli ultimi 7 giorni"></div>
     </section>
 
-    <section class="card">
-      <h2>HUD Overlay</h2>
-      <label class="toggle">
-        <input type="checkbox" id="hud-toggle" />
-        <span>ON/OFF per questo sito</span>
-      </label>
+    <section class="card site" id="site-card">
+      <div id="site-supported" class="hidden">
+        <label class="switch">
+          <span><b>HUD in pagina</b><br /><small id="site-domain">--</small></span>
+          <input type="checkbox" id="hud-toggle" />
+          <i aria-hidden="true"></i>
+        </label>
+      </div>
+      <div id="site-unsupported" class="hidden">
+        <div class="muted small">Apri un assistente supportato:</div>
+        <div class="providers" id="provider-links"></div>
+      </div>
     </section>
 
-    <section class="actions">
-      <button id="export-json">Export JSON</button>
-      <button id="export-csv">Export CSV</button>
-      <button id="open-options">Open Options</button>
-    </section>
+    <footer class="actions">
+      <button id="export-json" class="btn">⬇ JSON</button>
+      <button id="export-csv" class="btn">⬇ CSV</button>
+      <button id="open-options" class="btn primary">⚙ Impostazioni</button>
+      <button id="reset" class="btn ghost danger" title="Cancella tutti i dati salvati">Reset</button>
+    </footer>
+    <p class="disclaimer">Valori stimati da proxy osservabili (caratteri, media). Non sono misure reali.</p>
   </div>
 
   <script type="module" src="popup.js"></script>

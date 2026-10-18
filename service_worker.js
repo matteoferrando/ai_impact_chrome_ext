@@ -1,93 +1,19 @@
+import { PRESETS, getDefaultPreset, clonePresetParams, normalizeParams } from "./estimator/presets.js";
+import {
+  estimateImpact,
+  applyActivityToStats,
+  mergeStats,
+  emptyStats,
+  dateKey,
+  normalizeUXSettings,
+  deriveUXFromAggregate,
+  providerFromHost
+} from "./estimator/model.js";
+
 const PREFIX = "[AI Impact Meter]";
-const ACTIVITY_CAP = 500;
-// SESSION MANAGEMENT PATCH
-const sessionByTabProvider = {};
-
-const PRESETS = {
-  conservative: {
-    key: "conservative",
-    label: "Conservative",
-    params: {
-      chars_per_token: 4.5,
-      kwh_per_1k_tokens_range: { min: 0.0002, mid: 0.0005, max: 0.001 },
-      kwh_per_image_range: { min: 0.0001, mid: 0.0003, max: 0.0006 },
-      kwh_per_video_sec_range: { min: 0.00002, mid: 0.00008, max: 0.0002 },
-      grid_gco2e_per_kwh_range: { min: 150, mid: 300, max: 500 }
-    }
-  },
-  typical: {
-    key: "typical",
-    label: "Typical",
-    params: {
-      chars_per_token: 4,
-      kwh_per_1k_tokens_range: { min: 0.0005, mid: 0.001, max: 0.002 },
-      kwh_per_image_range: { min: 0.0002, mid: 0.0006, max: 0.001 },
-      kwh_per_video_sec_range: { min: 0.00005, mid: 0.0002, max: 0.0006 },
-      grid_gco2e_per_kwh_range: { min: 200, mid: 400, max: 700 }
-    }
-  },
-  aggressive: {
-    key: "aggressive",
-    label: "Aggressive",
-    params: {
-      chars_per_token: 3.5,
-      kwh_per_1k_tokens_range: { min: 0.001, mid: 0.0025, max: 0.005 },
-      kwh_per_image_range: { min: 0.0005, mid: 0.0012, max: 0.0025 },
-      kwh_per_video_sec_range: { min: 0.0001, mid: 0.0004, max: 0.0012 },
-      grid_gco2e_per_kwh_range: { min: 300, mid: 600, max: 900 }
-    }
-  }
-};
-
-function getDefaultPreset() {
-  return PRESETS.typical;
-}
-
-function clonePresetParams(params) {
-  return JSON.parse(JSON.stringify(params));
-}
-
-function estimateImpact(activity, preset) {
-  const p = preset && preset.params ? preset.params : preset;
-  if (!p) {
-    return { kwh: { min: 0, mid: 0, max: 0 }, co2e_g: { min: 0, mid: 0, max: 0 } };
-  }
-
-  const rangeFromBase = (base, range) => {
-    return {
-      min: base * range.min,
-      mid: base * range.mid,
-      max: base * range.max
-    };
-  };
-
-  let kwh = { min: 0, mid: 0, max: 0 };
-
-  if (activity.type === "text_turn") {
-    const chars = (activity.prompt_chars || 0) + (activity.response_chars || 0);
-    const tokens = p.chars_per_token > 0 ? Math.ceil(chars / p.chars_per_token) : 0;
-    const base = tokens / 1000;
-    kwh = rangeFromBase(base, p.kwh_per_1k_tokens_range);
-  } else if (activity.type === "image_gen") {
-    const count = activity.meta && activity.meta.count ? activity.meta.count : 0;
-    kwh = rangeFromBase(count, p.kwh_per_image_range);
-  } else if (activity.type === "video_gen") {
-    const secs = activity.meta && activity.meta.duration_sec ? activity.meta.duration_sec : 0;
-    kwh = rangeFromBase(secs, p.kwh_per_video_sec_range);
-  }
-
-  const co2e_g = {
-    min: kwh.min * p.grid_gco2e_per_kwh_range.min,
-    mid: kwh.mid * p.grid_gco2e_per_kwh_range.mid,
-    max: kwh.max * p.grid_gco2e_per_kwh_range.max
-  };
-
-  return { kwh, co2e_g };
-}
-
-const inMemory = {
-  partialByTab: {}
-};
+const ACTIVITY_CAP = 3000;
+const DAY_RETENTION = 400;
+const MAX_CHARS = 2_000_000;
 
 function log(...args) {
   try {
@@ -95,304 +21,355 @@ function log(...args) {
   } catch (_e) {}
 }
 
-// SESSION MANAGEMENT PATCH
-function getOrCreateSessionId(tabId, provider) {
+// ---------- coda di scrittura ----------
+// Tutte le operazioni read-modify-write sullo storage passano da qui, così due
+// attività che arrivano insieme (es. testo + immagine) non si sovrascrivono.
+let writeQueue = Promise.resolve();
+function enqueue(fn) {
+  const run = writeQueue.then(fn, fn);
+  writeQueue = run.catch((e) => log("queue error", e));
+  return run;
+}
+
+// ---------- sessioni (sopravvivono al riavvio del service worker) ----------
+async function getOrCreateSessionId(tabId, provider) {
   const key = `${tabId}:${provider || "unknown"}`;
-  if (!sessionByTabProvider[key]) {
-    let id = null;
-    try {
-      if (self.crypto && typeof self.crypto.randomUUID === "function") {
-        id = self.crypto.randomUUID();
-      }
-    } catch (_e) {}
-    if (!id) {
-      id = `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const res = await chrome.storage.session.get(["session_ids"]);
+  const map = res.session_ids || {};
+  if (!map[key]) {
+    map[key] = self.crypto && self.crypto.randomUUID ? self.crypto.randomUUID() : `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await chrome.storage.session.set({ session_ids: map });
+    log("session created", key, map[key]);
+  }
+  return map[key];
+}
+
+async function dropSessionIds(tabId) {
+  const res = await chrome.storage.session.get(["session_ids"]);
+  const map = res.session_ids || {};
+  let changed = false;
+  for (const k of Object.keys(map)) {
+    if (k.startsWith(`${tabId}:`)) {
+      delete map[k];
+      changed = true;
     }
-    sessionByTabProvider[key] = id;
-    log("SESSION CREATED", key, id);
   }
-  return sessionByTabProvider[key];
+  if (changed) await chrome.storage.session.set({ session_ids: map });
 }
 
-function todayKey() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function emptyRange() {
-  return { min: 0, mid: 0, max: 0 };
-}
-
-function emptyCounts() {
-  return { image_gen: 0, video_gen: 0 };
-}
-
-function mergeRange(a, b) {
-  return {
-    min: (a.min || 0) + (b.min || 0),
-    mid: (a.mid || 0) + (b.mid || 0),
-    max: (a.max || 0) + (b.max || 0)
-  };
-}
-
-function ensureStatsBase() {
-  return {
-    kwh: emptyRange(),
-    co2e_g: emptyRange(),
-    counts: emptyCounts(),
-    by_provider: {},
-    by_modality: {}
-  };
-}
-
-function applyActivityToStats(stats, activity) {
-  stats.kwh = mergeRange(stats.kwh, activity.impact.kwh);
-  stats.co2e_g = mergeRange(stats.co2e_g, activity.impact.co2e_g);
-  if (activity.type !== "text_turn") {
-    stats.counts[activity.type] = (stats.counts[activity.type] || 0) + 1;
-  }
-
-  const p = activity.provider || "unknown";
-  if (!stats.by_provider[p]) stats.by_provider[p] = { kwh: emptyRange(), co2e_g: emptyRange(), counts: emptyCounts() };
-  stats.by_provider[p].kwh = mergeRange(stats.by_provider[p].kwh, activity.impact.kwh);
-  stats.by_provider[p].co2e_g = mergeRange(stats.by_provider[p].co2e_g, activity.impact.co2e_g);
-  if (activity.type !== "text_turn") {
-    stats.by_provider[p].counts[activity.type] = (stats.by_provider[p].counts[activity.type] || 0) + 1;
-  }
-
-  const m = activity.modality || "unknown";
-  if (!stats.by_modality[m]) stats.by_modality[m] = { kwh: emptyRange(), co2e_g: emptyRange(), counts: emptyCounts() };
-  stats.by_modality[m].kwh = mergeRange(stats.by_modality[m].kwh, activity.impact.kwh);
-  stats.by_modality[m].co2e_g = mergeRange(stats.by_modality[m].co2e_g, activity.impact.co2e_g);
-  if (activity.type !== "text_turn") {
-    stats.by_modality[m].counts[activity.type] = (stats.by_modality[m].counts[activity.type] || 0) + 1;
-  }
-}
-
+// ---------- impostazioni ----------
 async function getSettings() {
   const res = await chrome.storage.local.get(["settings"]);
-  if (!res.settings) {
-    const preset = getDefaultPreset();
-    const settings = {
-      presetKey: preset.key,
-      params: clonePresetParams(preset.params)
-    };
-    await chrome.storage.local.set({ settings });
-    return settings;
-  }
-  return res.settings;
-}
-
-async function getPresetFromSettings() {
-  const settings = await getSettings();
-  const base = PRESETS[settings.presetKey] || getDefaultPreset();
-  return { ...base, params: settings.params || clonePresetParams(base.params) };
-}
-
-async function addActivityFinal(activityFinal) {
-  const preset = await getPresetFromSettings();
-  activityFinal.assumptions_used = {
-    presetKey: preset.key,
-    params: preset.params
+  const raw = res.settings || {};
+  const presetKey = PRESETS[raw.presetKey] ? raw.presetKey : getDefaultPreset().key;
+  const settings = {
+    presetKey,
+    params: normalizeParams(raw.params, presetKey),
+    ux: normalizeUXSettings(raw.ux)
   };
-  activityFinal.impact = estimateImpact(activityFinal, preset);
+  if (!res.settings) await chrome.storage.local.set({ settings });
+  return settings;
+}
 
-  const store = await chrome.storage.local.get(["activities", "session_stats_by_tab", "day_stats_by_date"]);
+// ---------- sanitizzazione input dai content script ----------
+const TYPES = new Set(["text_turn", "image_gen", "video_gen"]);
+const MODALITY_BY_TYPE = { text_turn: "text", image_gen: "image", video_gen: "video" };
+
+function clampInt(v, max = MAX_CHARS) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, max);
+}
+
+function sanitizeActivity(raw, sender) {
+  const a = raw && typeof raw === "object" ? raw : {};
+  const type = TYPES.has(a.type) ? a.type : "text_turn";
+  const url = (sender && sender.tab && sender.tab.url) || (sender && sender.url) || a.page_url || "";
+  let host = "";
+  try {
+    host = new URL(url).host;
+  } catch (_e) {}
+  const provider = providerFromHost(host) || (typeof a.provider === "string" ? a.provider.slice(0, 32) : "unknown");
+  const meta = a.meta && typeof a.meta === "object" ? { ...a.meta } : {};
+  if (type === "image_gen") meta.count = Math.max(1, clampInt(meta.count, 64));
+  if (type === "video_gen") {
+    meta.count = Math.max(1, clampInt(meta.count, 16));
+    const d = Number(meta.duration_sec);
+    meta.duration_sec = Number.isFinite(d) && d > 0 ? Math.min(d, 600) : null;
+  }
+  const now = Date.now();
+  const tsStart = Number(a.ts_start);
+  const tsEnd = Number(a.ts_end);
+  return {
+    id: typeof a.id === "string" && a.id ? a.id.slice(0, 64) : self.crypto.randomUUID(),
+    provider,
+    type,
+    modality: MODALITY_BY_TYPE[type],
+    ts_start: Number.isFinite(tsStart) && tsStart > 0 ? tsStart : now,
+    ts_end: Number.isFinite(tsEnd) && tsEnd > 0 ? tsEnd : now,
+    prompt_chars: clampInt(a.prompt_chars),
+    prompt_words: clampInt(a.prompt_words),
+    response_chars: clampInt(a.response_chars),
+    response_words: clampInt(a.response_words),
+    page_url: String(url).slice(0, 500),
+    domain: host,
+    meta
+  };
+}
+
+// ---------- registrazione attività ----------
+async function addActivityFinal(activity, tabId) {
+  const settings = await getSettings();
+  const preset = { key: settings.presetKey, params: settings.params };
+  activity.assumptions_used = { presetKey: preset.key, params: preset.params };
+  activity.impact = estimateImpact(activity, preset);
+
+  const store = await chrome.storage.local.get(["activities", "session_stats_by_tab", "day_stats_by_date", "totals"]);
   const activities = store.activities || [];
-  activities.push(activityFinal);
-  while (activities.length > ACTIVITY_CAP) activities.shift();
+  if (activities.some((x) => x.id === activity.id)) {
+    log("duplicate activity ignored", activity.id);
+    return null;
+  }
+  activities.push(activity);
+  if (activities.length > ACTIVITY_CAP) activities.splice(0, activities.length - ACTIVITY_CAP);
 
   const sessionMap = store.session_stats_by_tab || {};
-  const tabId = activityFinal.tab_id || "unknown";
-  if (!sessionMap[tabId]) sessionMap[tabId] = ensureStatsBase();
-  applyActivityToStats(sessionMap[tabId], activityFinal);
+  const tabKey = tabId != null ? String(tabId) : "unknown";
+  sessionMap[tabKey] = applyActivityToStats(sessionMap[tabKey] || emptyStats(), activity);
 
   const dayMap = store.day_stats_by_date || {};
-  const key = todayKey();
-  if (!dayMap[key]) dayMap[key] = ensureStatsBase();
-  applyActivityToStats(dayMap[key], activityFinal);
+  const key = dateKey(activity.ts_end || Date.now());
+  dayMap[key] = applyActivityToStats(dayMap[key] || emptyStats(), activity);
+  const keys = Object.keys(dayMap).sort();
+  while (keys.length > DAY_RETENTION) delete dayMap[keys.shift()];
 
-  await chrome.storage.local.set({ activities, session_stats_by_tab: sessionMap, day_stats_by_date: dayMap });
+  const totals = applyActivityToStats(store.totals || emptyStats(), activity);
 
-  // push to content scripts in tab
-  if (activityFinal.tab_id != null) {
-    try {
-      chrome.tabs.sendMessage(activityFinal.tab_id, { type: "session_update", session_stats: sessionMap[tabId] });
-    } catch (e) {
-      log("tabs.sendMessage failed", e);
-    }
+  await chrome.storage.local.set({ activities, session_stats_by_tab: sessionMap, day_stats_by_date: dayMap, totals });
+  log("activity recorded", activity.type, activity.provider, activity.impact.co2e_g.mid.toFixed(4), "g");
+
+  if (tabId != null) {
+    notifyTab(tabId, { type: "session_update", session_stats: sessionMap[tabKey], activity });
+    updateBadge(tabId, sessionMap[tabKey], settings);
+  }
+  return activity;
+}
+
+function notifyTab(tabId, msg) {
+  try {
+    const p = chrome.tabs.sendMessage(tabId, msg);
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  } catch (_e) {}
+}
+
+function badgeText(g) {
+  if (!g || g <= 0) return "";
+  if (g < 10) return g.toFixed(1);
+  if (g < 1000) return String(Math.round(g));
+  return `${Math.round(g / 1000)}k`;
+}
+
+async function updateBadge(tabId, stats, settings) {
+  try {
+    const s = settings || (await getSettings());
+    const g = stats && stats.co2e_g ? stats.co2e_g.mid : 0;
+    const ux = deriveUXFromAggregate(stats ? { ...stats, scope: "session" } : null, s);
+    await chrome.action.setBadgeText({ tabId, text: badgeText(g) });
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: ux.badge.color || "#22c55e" });
+    if (chrome.action.setBadgeTextColor) await chrome.action.setBadgeTextColor({ tabId, color: "#ffffff" });
+    await chrome.action.setTitle({ tabId, title: g > 0 ? `AI Impact Meter · sessione: ${g.toFixed(3)} g CO₂e` : "AI Impact Meter" });
+  } catch (_e) {
+    // tab chiuso nel frattempo
   }
 }
 
-async function recomputeDayAggregate(dateKey) {
-  const store = await chrome.storage.local.get(["activities", "day_stats_by_date"]);
-  const activities = store.activities || [];
-  const dayStats = ensureStatsBase();
-  for (const a of activities) {
-    const d = new Date(a.ts_start || 0);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (key === dateKey && a.impact) applyActivityToStats(dayStats, a);
-  }
-  const dayMap = store.day_stats_by_date || {};
-  dayMap[dateKey] = dayStats;
-  await chrome.storage.local.set({ day_stats_by_date: dayMap });
-  return dayStats;
+async function refreshBadgeForTab(tabId) {
+  const res = await chrome.storage.local.get(["session_stats_by_tab"]);
+  const stats = (res.session_stats_by_tab || {})[String(tabId)] || null;
+  await updateBadge(tabId, stats);
+}
+
+// ---------- export ----------
+function csvCell(v) {
+  if (v == null) return "";
+  const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 function exportCSV(activities) {
   const headers = [
-    "id",
-    "provider",
-    "type",
-    "modality",
-    "ts_start",
-    "ts_end",
-    "prompt_chars",
-    "prompt_words",
-    "response_chars",
-    "response_words",
-    "page_url",
-    "tab_id",
-    "session_id",
-    "kwh_min",
-    "kwh_mid",
-    "kwh_max",
-    "co2e_g_min",
-    "co2e_g_mid",
-    "co2e_g_max"
+    "id", "provider", "type", "modality", "ts_start", "ts_end", "datetime",
+    "prompt_chars", "prompt_words", "response_chars", "response_words", "tokens_est",
+    "media_count", "video_sec", "resolution", "model", "source",
+    "page_url", "tab_id", "session_id", "preset",
+    "kwh_min", "kwh_mid", "kwh_max", "co2e_g_min", "co2e_g_mid", "co2e_g_max"
   ];
   const lines = [headers.join(",")];
   for (const a of activities) {
+    const m = a.meta || {};
     const row = [
-      a.id,
-      a.provider,
-      a.type,
-      a.modality,
-      a.ts_start,
-      a.ts_end || "",
-      a.prompt_chars || 0,
-      a.prompt_words || 0,
-      a.response_chars || 0,
-      a.response_words || 0,
-      JSON.stringify(a.page_url || ""),
-      a.tab_id || "",
-      a.session_id || "",
-      a.impact?.kwh?.min || 0,
-      a.impact?.kwh?.mid || 0,
-      a.impact?.kwh?.max || 0,
-      a.impact?.co2e_g?.min || 0,
-      a.impact?.co2e_g?.mid || 0,
-      a.impact?.co2e_g?.max || 0
+      a.id, a.provider, a.type, a.modality, a.ts_start, a.ts_end || "",
+      a.ts_start ? new Date(a.ts_start).toISOString() : "",
+      a.prompt_chars || 0, a.prompt_words || 0, a.response_chars || 0, a.response_words || 0,
+      a.impact?.tokens || 0,
+      m.count || "", a.impact?.video_sec || "", m.resolution || "", m.model || "", m.source || "",
+      a.page_url || "", a.tab_id ?? "", a.session_id || "", a.assumptions_used?.presetKey || "",
+      a.impact?.kwh?.min || 0, a.impact?.kwh?.mid || 0, a.impact?.kwh?.max || 0,
+      a.impact?.co2e_g?.min || 0, a.impact?.co2e_g?.mid || 0, a.impact?.co2e_g?.max || 0
     ];
-    lines.push(row.join(","));
+    lines.push(row.map(csvCell).join(","));
   }
   return lines.join("\n");
 }
 
+// ---------- reset ----------
+async function resetData(scope) {
+  if (scope === "today") {
+    const store = await chrome.storage.local.get(["activities", "day_stats_by_date", "totals"]);
+    const key = dateKey();
+    const activities = (store.activities || []).filter((a) => dateKey(a.ts_end || a.ts_start) !== key);
+    const dayMap = store.day_stats_by_date || {};
+    const removed = dayMap[key];
+    delete dayMap[key];
+    let totals = store.totals || emptyStats();
+    if (removed) {
+      // ricostruisce i totali dalla somma dei giorni rimasti
+      totals = mergeStats(Object.values(dayMap));
+    }
+    await chrome.storage.local.set({ activities, day_stats_by_date: dayMap, totals, session_stats_by_tab: {} });
+  } else {
+    await chrome.storage.local.set({ activities: [], day_stats_by_date: {}, totals: emptyStats(), session_stats_by_tab: {} });
+  }
+  const tabs = await chrome.tabs.query({});
+  for (const t of tabs) {
+    if (t.id == null) continue;
+    notifyTab(t.id, { type: "session_update", session_stats: null });
+    chrome.action.setBadgeText({ tabId: t.id, text: "" }).catch(() => {});
+  }
+}
+
+// ---------- messaggi ----------
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (!msg || !msg.type) return;
-  // SESSION MANAGEMENT PATCH
+  if (!msg || !msg.type) return false;
   const tabId = sender && sender.tab ? sender.tab.id : null;
+  const fromExtensionPage = sender && sender.url && sender.url.startsWith(chrome.runtime.getURL(""));
 
-  if (msg.type === "get_tab_id") {
-    sendResponse({ tabId: tabId });
-    return true;
-  }
-
-  if (msg.type === "activity_partial") {
-    if (tabId == null) {
-      log("activity_partial without sender.tab (ignored)");
-      sendResponse({ ok: false });
-      return true;
-    }
-    const activity = msg.activity || {};
-    activity.meta = activity.meta || {};
-    const provider = activity.provider || "unknown";
-    const sessionId = getOrCreateSessionId(tabId, provider);
-    activity.meta.tab_id = tabId;
-    activity.meta.session_id = sessionId;
-    inMemory.partialByTab[tabId] = activity;
-    sendResponse({ ok: true });
-    return true;
-  }
-
-  if (msg.type === "activity_final") {
-    if (tabId == null) {
-      log("activity_final without sender.tab (ignored)");
-      sendResponse({ ok: false });
-      return true;
-    }
-    const activity = msg.activity || {};
-    activity.meta = activity.meta || {};
-    const provider = activity.provider || "unknown";
-    const sessionId = getOrCreateSessionId(tabId, provider);
-    activity.meta.tab_id = tabId;
-    activity.meta.session_id = sessionId;
-    activity.tab_id = tabId;
-    activity.session_id = sessionId;
-
-    addActivityFinal(activity).then(() => sendResponse({ ok: true })).catch((e) => {
-      log("addActivityFinal error", e);
-      sendResponse({ ok: false });
-    });
-    return true;
-  }
-
-  if (msg.type === "hud_toggle") {
-    const domain = msg.domain;
-    const enabled = !!msg.enabled;
-    if (msg.tab_only) {
-      if (tabId != null) {
-        chrome.tabs.sendMessage(tabId, { type: "hud_state", enabled });
-      }
-      sendResponse({ ok: true });
-      return true;
-    }
-    chrome.storage.local.get(["hud_by_domain"], (res) => {
-      const map = res.hud_by_domain || {};
-      map[domain] = enabled;
-      chrome.storage.local.set({ hud_by_domain: map }, () => {
-        if (tabId != null) chrome.tabs.sendMessage(tabId, { type: "hud_state", enabled });
-        sendResponse({ ok: true });
+  const reply = (p) => {
+    Promise.resolve(p)
+      .then((r) => sendResponse(r))
+      .catch((e) => {
+        log(msg.type, "error", e);
+        sendResponse({ ok: false, error: String(e && e.message ? e.message : e) });
       });
-    });
     return true;
-  }
+  };
 
-  if (msg.type === "get_day_stats") {
-    const key = msg.dateKey || todayKey();
-    recomputeDayAggregate(key).then((stats) => sendResponse({ stats })).catch((_e) => sendResponse({ stats: ensureStatsBase() }));
-    return true;
-  }
+  switch (msg.type) {
+    case "get_tab_id":
+      if (tabId != null) refreshBadgeForTab(tabId).catch(() => {});
+      sendResponse({ tabId });
+      return false;
 
-  if (msg.type === "export_json") {
-    chrome.storage.local.get(["activities"], (res) => {
-      sendResponse({ data: res.activities || [] });
-    });
-    return true;
-  }
+    case "activity_partial":
+      sendResponse({ ok: tabId != null });
+      return false;
 
-  if (msg.type === "export_csv") {
-    chrome.storage.local.get(["activities"], (res) => {
-      sendResponse({ data: exportCSV(res.activities || []) });
-    });
-    return true;
+    case "activity_final": {
+      if (tabId == null) {
+        sendResponse({ ok: false });
+        return false;
+      }
+      return reply(
+        (async () => {
+          const activity = sanitizeActivity(msg.activity, sender);
+          const sessionId = await getOrCreateSessionId(tabId, activity.provider);
+          activity.tab_id = tabId;
+          activity.session_id = sessionId;
+          activity.meta.tab_id = tabId;
+          activity.meta.session_id = sessionId;
+          const saved = await enqueue(() => addActivityFinal(activity, tabId));
+          return { ok: true, recorded: !!saved };
+        })()
+      );
+    }
+
+    case "open_options":
+      chrome.runtime.openOptionsPage();
+      sendResponse({ ok: true });
+      return false;
+
+    case "hud_toggle": {
+      const enabled = !!msg.enabled;
+      if (msg.tab_only) {
+        sendResponse({ ok: true });
+        return false;
+      }
+      return reply(
+        enqueue(async () => {
+          const res = await chrome.storage.local.get(["hud_by_domain"]);
+          const map = res.hud_by_domain || {};
+          if (msg.domain) map[msg.domain] = enabled;
+          await chrome.storage.local.set({ hud_by_domain: map });
+          return { ok: true };
+        })
+      );
+    }
+
+    case "get_day_stats":
+      return reply(
+        chrome.storage.local.get(["day_stats_by_date"]).then((res) => ({
+          stats: (res.day_stats_by_date || {})[msg.dateKey || dateKey()] || emptyStats()
+        }))
+      );
+
+    case "export_json":
+      return reply(chrome.storage.local.get(["activities"]).then((res) => ({ data: res.activities || [] })));
+
+    case "export_csv":
+      return reply(chrome.storage.local.get(["activities"]).then((res) => ({ data: exportCSV(res.activities || []) })));
+
+    case "reset_data":
+      if (!fromExtensionPage) {
+        sendResponse({ ok: false });
+        return false;
+      }
+      return reply(enqueue(() => resetData(msg.scope)).then(() => ({ ok: true })));
+
+    default:
+      return false;
   }
 });
 
+// ---------- ciclo di vita ----------
 chrome.tabs.onRemoved.addListener((tabId) => {
-  // SESSION MANAGEMENT PATCH
-  Object.keys(sessionByTabProvider).forEach((key) => {
-    if (key.startsWith(`${tabId}:`)) delete sessionByTabProvider[key];
-  });
-  chrome.storage.local.get(["session_stats_by_tab"], (res) => {
+  dropSessionIds(tabId).catch(() => {});
+  enqueue(async () => {
+    const res = await chrome.storage.local.get(["session_stats_by_tab"]);
     const map = res.session_stats_by_tab || {};
-    if (map[tabId]) {
-      delete map[tabId];
-      chrome.storage.local.set({ session_stats_by_tab: map });
+    if (map[String(tabId)]) {
+      delete map[String(tabId)];
+      await chrome.storage.local.set({ session_stats_by_tab: map });
     }
   });
 });
+
+// Gli ID dei tab non sopravvivono al riavvio del browser: le sessioni vecchie vanno rimosse.
+chrome.runtime.onStartup.addListener(() => {
+  enqueue(() => chrome.storage.local.set({ session_stats_by_tab: {} }));
+});
+
+chrome.runtime.onInstalled.addListener((details) => {
+  enqueue(async () => {
+    const settings = await getSettings();
+    await chrome.storage.local.set({ settings });
+    const res = await chrome.storage.local.get(["totals", "day_stats_by_date"]);
+    if (!res.totals && res.day_stats_by_date) {
+      await chrome.storage.local.set({ totals: mergeStats(Object.values(res.day_stats_by_date)) });
+    }
+    log("installed", details.reason, chrome.runtime.getManifest().version);
+  });
+  if (details.reason === "install") chrome.runtime.openOptionsPage();
+});
+
+// esposto per debug dalla console del service worker
+self.AIIM_DEBUG = { getSettings, exportCSV, resetData, clonePresetParams };

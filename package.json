@@ -1,0 +1,16 @@
+{
+  "name": "ai-impact-meter",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension che stima l'impatto ambientale dell'uso di AI generativa.",
+  "scripts": {
+    "test": "node --test tests/model.test.mjs",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "check": "for f in service_worker.js estimator/*.js ui/*.js content_scripts/*.js content_scripts/providers/*.js; do node --check \"$f\" || exit 1; done",
+    "package": "rm -f ai-impact-meter.zip && zip -r ai-impact-meter.zip manifest.json service_worker.js estimator content_scripts ui icons -x '*.DS_Store'"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

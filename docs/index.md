@@ -1,6 +1,6 @@
 # 🔐 Privacy Policy — AI Impact Meter
 
-Last updated: 27/01/2026
+Last updated: 18/10/2026
 
 ## 1. Data collection
 
@@ -10,9 +10,10 @@ All data processed by the extension remains locally on the user’s device.
 
 The extension processes, locally in the browser, the following information:
 
-- text length and structure of prompts and AI responses,
-- interaction metadata (timestamps, counts of messages, images, or videos),
-- user configuration settings.
+- text length and structure of prompts and AI responses (character and word counts only — the text itself is never stored),
+- interaction metadata (timestamps, counts of messages, images, or videos, video duration and resolution),
+- the URL of the conversation page and the name of the AI model shown in the page, if visible,
+- user configuration settings and the position of the in-page widget.
 
 This data is used only to estimate environmental impact and generate local statistics.
 
@@ -22,7 +23,7 @@ All data is stored exclusively using Chrome’s local storage (chrome.storage.lo
 
 No data is synced, shared, or transmitted outside the browser.
 
-Users can delete all stored data at any time by removing the extension.
+Users can delete all stored data at any time from the extension popup or settings page ("Reset" / "Delete all"), or by removing the extension.
 
 ## 3. Data sharing
 
@@ -39,7 +40,7 @@ The extension does not make any external network requests.
 
 - Host permissions: required to operate on supported AI websites in order to observe user interactions and generated content.
 - Storage: required to save local statistics and user preferences.
-- ActiveTab: required to interact only with the active tab and provide in-page UI.
+- ActiveTab: required to read the active tab's address when the popup is opened, to show the statistics of that tab.
 - Downloads: required to export user data locally upon explicit user request.
 
 All permissions are used strictly to provide the stated functionality.
